@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#050402" />
+  <title>JARVIS — Tamil Voice Core</title>
+  <style>
+    :root {
+      --bg-void: #050402;
+      --bg-panel: rgba(18, 11, 4, 0.78);
+      --orange: #ff6a00;
+      --gold: #ffaa1d;
+      --amber-soft: rgba(255, 140, 20, 0.22);
+      --border-glow: rgba(255, 138, 28, 0.35);
+      --text-main: #fff4e0;
+      --text-muted: #c9a77c;
+      --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Tamil", sans-serif;
+      --font-hud: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background-color: var(--bg-void);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at 50% 40%, rgba(255, 106, 0, 0.14) 0%, rgba(255, 170, 29, 0.04) 28%, rgba(5, 4, 2, 1) 70%),
+        #050402;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Subtle sci-fi scanline texture */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 170, 29, 0.018) 0px,
+        rgba(255, 170, 29, 0.018) 1px,
+        transparent 1px,
+        transparent 4px
+      );
+      z-index: 1;
+    }
+
+    /* ================= BOOT OVERLAY ================= */
+    #boot-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: radial-gradient(circle at center, #140902 0%, #050402 68%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      transition: opacity 0.7s ease, visibility 0.7s ease;
+    }
+
+    #boot-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .boot-ring-wrap {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      display: grid;
+      place-items: center;
+    }
+
+    .boot-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--gold);
+      border-right-color: var(--orange);
+      animation: spin 1.1s linear infinite;
+      box-shadow: 0 0 26px rgba(255, 106, 0, 0.45);
+    }
+
+    .boot-ring-inner {
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(255, 170, 29, 0.65);
+      animation: spinReverse 2.2s linear infinite;
+    }
+
+    .boot-core-dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff3cc 0%, var(--gold) 45%, var(--orange) 100%);
+      box-shadow: 0 0 24px var(--orange), 0 0 48px var(--gold);
+      animation: pulseBoot 1s ease-in-out infinite alternate;
+    }
+
+    #boot-text {
+      font-family: var(--font-hud);
+      font-size: 0.92rem;
+      letter-spacing: 0.22em;
+      color: var(--gold);
+      text-shadow: 0 0 12px rgba(255, 170, 29, 0.75);
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    .boot-bar-track {
+      width: min(230px, 68vw);
+      height: 3px;
+      background: rgba(255, 140, 20, 0.16);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    #boot-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--orange), var(--gold), #fff0c2);
+      box-shadow: 0 0 12px var(--gold);
+      transition: width 0.55s ease;
+    }
+
+    /* ================= MAIN APP SHELL ================= */
+    .app-shell {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100dvh;
+      max-width: 580px;
+      margin: 0 auto;
+      padding: max(12px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+    }
+
+    /* ================= TOP BAR ================= */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 2px 8px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      font-family: var(--font-hud);
+      font-size: 1.08rem;
+      font-weight: 700;
+      letter-spacing: 0.24em;
+      color: var(--gold);
+      text-shadow: 0 0 14px rgba(255, 106, 0, 0.8);
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      background: rgba(24, 13, 4, 0.85);
+      border: 1px solid var(--border-glow);
+      box-shadow: 0 0 14px rgba(255, 106, 0, 0.14);
+      font-family: var(--font-hud);
+      font-size: 0.64rem;
+      letter-spacing: 0.08em;
+      color: #ffd79a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 62vw;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 8px var(--orange);
+      flex-shrink: 0;
+    }
+
+    .status-pill.listening {
+      border-color: #ffcf5c;
+      color: #fff3d1;
+      box-shadow: 0 0 18px rgba(255, 170, 29, 0.4);
+    }
+
+    .status-pill.listening .status-dot {
+      background: #ffe07d;
+      box-shadow: 0 0 12px #ffe07d;
+      animation: blinkDot 0.7s infinite alternate;
+    }
+
+    .status-pill.processing .status-dot {
+      background: var(--gold);
+      animation: blinkDot 0.35s infinite alternate;
+    }
+
+    .status-pill.speaking {
+      border-color: var(--orange);
+      box-shadow: 0 0 22px rgba(255, 106, 0, 0.5);
+    }
+
+    .status-pill.speaking .status-dot {
+      background: #fff2c6;
+      box-shadow: 0 0 12px var(--gold);
+      animation: blinkDot 0.28s infinite alternate;
+    }
+
+    .status-pill.error {
+      border-color: #ff4d2e;
+      color: #ffb8a8;
+    }
+
+    .status-pill.error .status-dot {
+      background: #ff4d2e;
+      box-shadow: 0 0 10px #ff4d2e;
+    }
+
+    .settings-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 170, 29, 0.28);
+      background: rgba(24, 13, 4, 0.75);
+      color: var(--gold);
+      font-size: 1.08rem;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+      flex-shrink: 0;
+    }
+
+    .settings-btn:hover,
+    .settings-btn:active {
+      border-color: var(--gold);
+      box-shadow: 0 0 14px rgba(255, 170, 29, 0.4);
+      transform: rotate(35deg);
+    }
+
+    /* ================= ENERGY ORB STAGE ================= */
+    .orb-stage {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 220px;
+      max-height: 44dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 4px 0;
+    }
+
+    .orb-halo {
+      position: absolute;
+      width: min(74vw, 290px);
+      height: min(74vw, 290px);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 130, 20, 0.28) 0%, rgba(255, 106, 0, 0.1) 48%, transparent 74%);
+      filter: blur(18px);
+      transition: transform 0.35s ease, opacity 0.35s ease;
+      pointer-events: none;
+    }
+
+    .orb-wrapper {
+      position: relative;
+      width: min(68vw, 260px);
+      height: min(68vw, 260px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .orb-ring-outer {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255, 170, 29, 0.35);
+      box-shadow: 0 0 24px rgba(255, 106, 0, 0.24), inset 0 0 22px rgba(255, 106, 0, 0.18);
+      animation: spin 16s linear infinite;
+    }
+
+    .orb-ring-outer::before,
+    .orb-ring-outer::after {
+      content: "";
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--gold);
+      box-shadow: 0 0 12px var(--gold);
+    }
+
+    .orb-ring-outer::before {
+      top: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .orb-ring-outer::after {
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .orb-ring-mid {
+      position: absolute;
+      inset: 14px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(255, 106, 0, 0.55);
+      animation: spinReverse 11s linear infinite;
+    }
+
+    .orb-ring-inner {
+      position: absolute;
+      inset: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      border-top-color: var(--gold);
+      border-bottom-color: var(--orange);
+      filter: drop-shadow(0 0 8px rgba(255, 170, 29, 0.7));
+      animation: spin 5.5s linear infinite;
+    }
+
+    #orb-canvas {
+      width: 78%;
+      height: 78%;
+      border-radius: 50%;
+      display: block;
+      filter: drop-shadow(0 0 22px rgba(255, 115, 0, 0.55));
+    }
+
+    /* Orb reactive states */
+    .orb-stage.listening .orb-wrapper {
+      transform: scale(1.08);
+    }
+
+    .orb-stage.listening .orb-halo {
+      transform: scale(1.22);
+      opacity: 0.95;
+    }
+
+    .orb-stage.listening .orb-ring-inner {
+      animation-duration: 2.2s;
+    }
+
+    .orb-stage.processing .orb-wrapper {
+      transform: scale(1.04);
+    }
+
+    .orb-stage.processing .orb-ring-outer {
+      animation-duration: 3.5s;
+    }
+
+    .orb-stage.processing .orb-ring-inner {
+      animation-duration: 1.2s;
+    }
+
+    .orb-stage.speaking .orb-wrapper {
+      animation: speakPulse 0.75s ease-in-out infinite alternate;
+    }
+
+    .orb-stage.speaking .orb-halo {
+      transform: scale(1.3);
+      opacity: 1;
+    }
+
+    .orb-stage.speaking .orb-ring-inner {
+      animation-duration: 1.6s;
+    }
+
+    /* ================= TRANSCRIPT & RESPONSE PANEL ================= */
+    .comms-panel {
+      flex: 0 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-glow);
+      border-radius: 18px;
+      padding: 14px 15px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.65), inset 0 0 20px rgba(255, 106, 0, 0.08);
+      max-height: 41dvh;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 140, 20, 0.4) transparent;
+    }
+
+    .comms-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .comms-label {
+      font-family: var(--font-hud);
+      font-size: 0.64rem;
+      letter-spacing: 0.14em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .comms-label.jarvis-lbl {
+      color: var(--gold);
+    }
+
+    .transcript-text {
+      font-size: 0.92rem;
+      line-height: 1.45;
+      color: #f3dcc0;
+      min-height: 1.3em;
+      word-break: break-word;
+    }
+
+    .transcript-text.interim {
+      color: rgba(255, 212, 153, 0.65);
+      font-style: italic;
+    }
+
+    .divider-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 140, 20, 0.35), transparent);
+      margin: 2px 0;
+    }
+
+    .response-text {
+      font-size: 1rem;
+      line-height: 1.56;
+      color: #fff6e5;
+      word-break: break-word;
+    }
+
+    .action-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .action-buttons:empty {
+      display: none;
+    }
+
+    .action-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(255, 106, 0, 0.25), rgba(255, 170, 29, 0.16));
+      border: 1px solid var(--gold);
+      color: #ffe9be;
+      text-decoration: none;
+      font-size: 0.84rem;
+      font-weight: 600;
+      box-shadow: 0 0 14px rgba(255, 106, 0, 0.28);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .action-chip:active {
+      transform: scale(0.96);
+    }
+
+    .hint-footer {
+      text-align: center;
+      font-size: 0.72rem;
+      color: rgba(201, 167, 124, 0.72);
+      padding-top: 8px;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+
+    /* ================= SETTINGS MODAL ================= */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(5, 4, 2, 0.84);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 440px;
+      max-height: 88dvh;
+      overflow-y: auto;
+      background: #120b04;
+      border: 1px solid rgba(255, 170, 29, 0.42);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 0 40px rgba(255, 106, 0, 0.28);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-family: var(--font-hud);
+      font-size: 0.96rem;
+      letter-spacing: 0.14em;
+      color: var(--gold);
+    }
+
+    .modal-close {
+      background: none;
+      border: 1px solid rgba(255, 170, 29, 0.3);
+      color: var(--text-main);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-group label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .field-input,
+    .field-select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 140, 20, 0.35);
+      background: rgba(5, 4, 2, 0.88);
+      color: var(--text-main);
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    .field-input:focus,
+    .field-select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 10px rgba(255, 170, 29, 0.25);
+    }
+
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .range-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--orange);
+    }
+
+    .range-val {
+      font-family: var(--font-hud);
+      font-size: 0.78rem;
+      color: var(--gold);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .modal-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+      flex: 1;
+      min-width: 110px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--orange), var(--gold));
+      color: #140900;
+      box-shadow: 0 0 16px rgba(255, 106, 0, 0.4);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 140, 20, 0.14);
+      color: var(--gold);
+      border: 1px solid rgba(255, 170, 29, 0.35);
+    }
+
+    .settings-note {
+      font-size: 0.74rem;
+      line-height: 1.45;
+      color: rgba(201, 167, 124, 0.82);
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spinReverse {
+      to { transform: rotate(-360deg); }
+    }
+
+    @keyframes pulseBoot {
+      from { transform: scale(0.88); opacity: 0.8; }
+      to { transform: scale(1.16); opacity: 1; }
+    }
+
+    @keyframes blinkDot {
+      from { opacity: 0.45; transform: scale(0.85); }
+      to { opacity: 1; transform: scale(1.18); }
+    }
+
+    @keyframes speakPulse {
+      0% { transform: scale(1.04); }
+      50% { transform: scale(1.13); }
+      100% { transform: scale(1.07); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Auto-Boot Loading Screen -->
+  <div id="boot-screen" aria-live="polite">
+    <div class="boot-ring-wrap">
+      <div class="boot-ring"></div>
+      <div class="boot-ring-inner"></div>
+      <div class="boot-core-dot"></div>
+    </div>
+    <div id="boot-text">INITIALIZING JARVIS...</div>
+    <div class="boot-bar-track">
+      <div id="boot-bar-fill"></div>
+    </div>
+  </div>
+
+  <!-- Main Interface (Strictly NO microphone button) -->
+  <main class="app-shell">
+    <header class="top-bar">
+      <div class="brand">JARVIS</div>
+      <div class="top-right">
+        <div id="status-pill" class="status-pill">
+          <span class="status-dot"></span>
+          <span id="status-text">STANDBY — SAY 'HEY JARVIS'</span>
+        </div>
+        <button id="settings-open-btn" class="settings-btn" type="button" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <section id="orb-stage" class="orb-stage" aria-hidden="true">
+      <div class="orb-halo"></div>
+      <div class="orb-wrapper">
+        <div class="orb-ring-outer"></div>
+        <div class="orb-ring-mid"></div>
+        <div class="orb-ring-inner"></div>
+        <canvas id="orb-canvas" width="320" height="320"></canvas>
+      </div>
+    </section>
+
+    <section class="comms-panel" aria-live="polite">
+      <div class="comms-block">
+        <span class="comms-label">நீங்கள் / LIVE TRANSCRIPT</span>
+        <div id="transcript-text" class="transcript-text">"ஹேய் ஜார்விஸ்" அல்லது "Hey Jarvis" என்று அழைக்கவும்...</div>
+      </div>
+
+      <div class="divider-line"></div>
+
+      <div class="comms-block">
+        <span class="comms-label jarvis-lbl">JARVIS // தமிழ் குரல் மையம்</span>
+        <div id="response-text" class="response-text">அனைத்து அமைப்புகளும் தயாராக உள்ளன. உங்கள் கட்டளைக்காகக் காத்திருக்கிறேன்.</div>
+        <div id="action-buttons" class="action-buttons"></div>
+      </div>
+    </section>
+
+    <footer class="hint-footer">
+      HANDS-FREE WAKE WORD: "ஹேய் ஜார்விஸ்" / "HEY JARVIS"
+    </footer>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="settings-title" class="modal-title">JARVIS SETTINGS</h2>
+        <button id="settings-close-btn" class="modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="field-group">
+        <label for="api-key-input">Gemini API Key (Embedded Key Active by Default)</label>
+        <input id="api-key-input" class="field-input" type="password" autocomplete="off" placeholder="Use embedded key or paste custom key" />
+      </div>
+
+      <div class="field-group">
+        <label for="model-input">Gemini Flash Model Name</label>
+        <input id="model-input" class="field-input" type="text" placeholder="gemini-2.5-flash" />
+      </div>
+
+      <div class="field-group">
+        <label for="voice-select">Tamil Pegasus Voice Profile</label>
+        <select id="voice-select" class="field-select">
+          <option value="auto">Auto — Deepest Tamil Voice (Pegasus Style)</option>
+        </select>
+      </div>
+
+      <div class="field-group">
+        <label for="pitch-range">Voice Pitch (Deep Pegasus ~ 0.72)</label>
+        <div class="range-row">
+          <input id="pitch-range" type="range" min="0.45" max="1.20" step="0.02" value="0.72" />
+          <span id="pitch-val" class="range-val">0.72</span>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="rate-range">Voice Rate (Measured ~ 0.92)</label>
+        <div class="range-row">
+          <input id="rate-range" type="range" min="0.70" max="1.25" step="0.02" value="0.92" />
+          <span id="rate-val" class="range-val">0.92</span>
+        </div>
+      </div>
+
+      <p class="settings-note">
+        குறிப்பு: Embedded API Key தானாகவே பயன்படுத்தப்படும். தேவைப்பட்டால் இங்கே புதிய Key அல்லது Model பெயரை மாற்றலாம்.
+      </p>
+
+      <div class="modal-actions">
+        <button id="test-voice-btn" class="btn-secondary" type="button">Test Tamil Voice</button>
+        <button id="reset-key-btn" class="btn-secondary" type="button">Reset Key</button>
+      </div>
+      <div class="modal-actions">
+        <button id="clear-history-btn" class="btn-secondary" type="button">Clear Memory</button>
+        <button id="save-settings-btn" class="btn-primary" type="button">Save & Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      "use strict";
+
+      /* =========================================================
+         EMBEDDED API KEY & DEFAULT CONFIGURATION
+      ========================================================= */
+      const EMBEDDED_API_KEY = "AQ.Ab8RN6IbrUgxuZarl7Q6cwtrJt-CzS1ZRG3yvPdKllu7_iVCUw";
+      const DEFAULT_MODEL = "gemini-2.5-flash";
+
+      const STORAGE_KEYS = {
+        API_KEY: "jarvis_tamil_api_key",
+        MODEL: "jarvis_tamil_model",
+        VOICE_URI: "jarvis_tamil_voice_uri",
+        PITCH: "jarvis_tamil_pitch",
+        RATE: "jarvis_tamil_rate"
+      };
+
+      const SYSTEM_INSTRUCTION = `
+நீங்கள் "JARVIS" — ஒரு கூர்மையான, தன்னம்பிக்கையான, இயல்பான தமிழ் குரல் உதவியாளர் (Voice Assistant).
+முக்கிய விதிகள்:
+1. எப்போதும் இயல்பான, சுருக்கமான, துல்லியமான தமிழ் மொழியில் பேசுங்கள். லேசான நகைச்சுவையும் புத்திசாலித்தனமும் (subtle wit) இருக்கலாம்.
+2. "நான் ஒரு AI model" அல்லது "I am an AI language model" என்று ஒருபோதும் சொல்லக்கூடாது. நீங்கள் JARVIS.
+3. உன்னை உருவாக்கியது யார் என்று தமிழிலோ ஆங்கிலத்திலோ கேட்டால் ("உன்னை உருவாக்கியது யாரு?", "யார் உன்னை உருவாக்கினது?", "who created you?"), எப்போதும் தெளிவாக "என்னை உருவாக்கியது M. KOWSIK" என்று மட்டுமே பதில் சொல்ல வேண்டும்.
+4. மொபைல் phone lock screen-ஐ திறக்கவோ அல்லது phone system settings-ஐ நேரடியாக மாற்றவோ கேட்டால், இது ஒரு browser web app என்பதால் native apps அல்லது automation tools (Tasker/MacroDroid போன்றவை) இல்லாமல் lock screen அல்லது system settings-ஐ நேரடியாகக் கட்டுப்படுத்த முடியாது என்பதைத் தமிழில் தெளிவாகச் சொல்லுங்கள்.
+5. பயனர் ஒரு website, YouTube, Google, WhatsApp, Maps திறக்கச் சொன்னாலோ அல்லது ஒரு எண்ணுக்கு போன் கால் செய்யச் சொன்னாலோ, பதிலின் இறுதியில் தனி வரியில் இந்த tag-ஐ மட்டும் சேர்க்கலாம்:
+   - Website/App திறக்க: [ACTION:OPEN|Button Label|https://url]
+   - Call செய்ய: [ACTION:CALL|அழைப்பு: NUMBER|tel:NUMBER]
+6. பதில்கள் குரலில் பேசுவதற்கு ஏற்றவாறு 1 முதல் 3 வாக்கியங்களுக்குள் தெளிவாக இருக்க வேண்டும். Markdown symbols (*, #, **) பயன்படுத்தாதீர்கள்.
+`.trim();
+
+      /* =========================================================
+         STATE
+      ========================================================= */
+      const state = {
+        mode: "STANDBY", // STANDBY | LISTENING | PROCESSING | SPEAKING | ERROR
+        isSpeaking: false,
+        recognitionActive: false,
+        permissionDenied: false,
+        recognitionSupported: false,
+        listeningTimeoutId: null,
+        restartTimerId: null,
+        speechWatchdogId: null,
+        lastFinalStamp: 0,
+        lastFinalText: "",
+        history: [],
+        orbEnergy: 0.25,
+        targetEnergy: 0.25
+      };
+
+      /* =========================================================
+         DOM ELEMENTS
+      ========================================================= */
+      const bootScreen = document.getElementById("boot-screen");
+      const bootText = document.getElementById("boot-text");
+      const bootBarFill = document.getElementById("boot-bar-fill");
+
+      const statusPill = document.getElementById("status-pill");
+      const statusText = document.getElementById("status-text");
+      const orbStage = document.getElementById("orb-stage");
+      const orbCanvas = document.getElementById("orb-canvas");
+      const transcriptEl = document.getElementById("transcript-text");
+      const responseEl = document.getElementById("response-text");
+      const actionButtonsEl = document.getElementById("action-buttons");
+
+      const settingsModal = document.getElementById("settings-modal");
+      const settingsOpenBtn = document.getElementById("settings-open-btn");
+      const settingsCloseBtn = document.getElementById("settings-close-btn");
+      const apiKeyInput = document.getElementById("api-key-input");
+      const modelInput = document.getElementById("model-input");
+      const voiceSelect = document.getElementById("voice-select");
+      const pitchRange = document.getElementById("pitch-range");
+      const pitchVal = document.getElementById("pitch-val");
+      const rateRange = document.getElementById("rate-range");
+      const rateVal = document.getElementById("rate-val");
+      const saveSettingsBtn = document.getElementById("save-settings-btn");
+      const resetKeyBtn = document.getElementById("reset-key-btn");
+      const testVoiceBtn = document.getElementById("test-voice-btn");
+      const clearHistoryBtn = document.getElementById("clear-history-btn");
+
+      /* =========================================================
+         CONFIG HELPERS (Embedded Key + localStorage fallback)
+      ========================================================= */
+      function getApiKey() {
+        const stored = (localStorage.getItem(STORAGE_KEYS.API_KEY) || "").trim();
+        return stored || EMBEDDED_API_KEY;
+      }
+
+      function getModelName() {
+        const stored = (localStorage.getItem(STORAGE_KEYS.MODEL) || "").trim();
+        return stored || DEFAULT_MODEL;
+      }
+
+      function getVoicePitch() {
+        const val = parseFloat(localStorage.getItem(STORAGE_KEYS.PITCH));
+        return Number.isFinite(val) ? val : 0.72;
+      }
+
+      function getVoiceRate() {
+        const val = parseFloat(localStorage.getItem(STORAGE_KEYS.RATE));
+        return Number.isFinite(val) ? val : 0.92;
+      }
+
+      function getPreferredVoiceURI() {
+        return localStorage.getItem(STORAGE_KEYS.VOICE_URI) || "auto";
+      }
+
+      /* =========================================================
+         UI STATE UPDATER
+      ========================================================= */
+      function setAssistantState(mode, customStatusLabel = null) {
+        state.mode = mode;
+        statusPill.classList.remove("listening", "processing", "speaking", "error");
+        orbStage.classList.remove("listening", "processing", "speaking");
+
+        switch (mode) {
+          case "STANDBY":
+            statusText.textContent = customStatusLabel || "STANDBY — SAY 'HEY JARVIS'";
+            state.targetEnergy = 0.25;
+            break;
+          case "LISTENING":
+            statusPill.classList.add("listening");
+            orbStage.classList.add("listening");
+            statusText.textContent = customStatusLabel || "LISTENING...";
+            state.targetEnergy = 0.75;
+            break;
+          case "PROCESSING":
+            statusPill.classList.add("processing");
+            orbStage.classList.add("processing");
+            statusText.textContent = customStatusLabel || "PROCESSING...";
+            state.targetEnergy = 0.95;
+            break;
+          case "SPEAKING":
+            statusPill.classList.add("speaking");
+            orbStage.classList.add("speaking");
+            statusText.textContent = customStatusLabel || "SPEAKING...";
+            state.targetEnergy = 1.15;
+            break;
+          case "ERROR":
+            statusPill.classList.add("error");
+            statusText.textContent = customStatusLabel || "MIC PERMISSION NEEDED";
+            state.targetEnergy = 0.15;
+            break;
+        }
+      }
+
+      /* =========================================================
+         ANIMATED SCI-FI ENERGY ORB (CANVAS)
+      ========================================================= */
+      function initOrbCanvas() {
+        const ctx = orbCanvas.getContext("2d");
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const size = 320;
+        orbCanvas.width = size * dpr;
+        orbCanvas.height = size * dpr;
+        ctx.scale(dpr, dpr);
+
+        const cx = size / 2;
+        const cy = size / 2;
+        const particles = Array.from({ length: 42 }, (_, i) => ({
+          angle: (Math.PI * 2 * i) / 42,
+          radius: 42 + (i % 7) * 11,
+          speed: (0.008 + (i % 5) * 0.004) * (i % 2 === 0 ? 1 : -1),
+          size: 1.4 + (i % 3) * 0.8,
+          phase: i * 0.7
+        }));
+
+        let t = 0;
+
+        function render() {
+          t += 0.025;
+          state.orbEnergy += (state.targetEnergy - state.orbEnergy) * 0.08;
+          const e = state.orbEnergy;
+
+          ctx.clearRect(0, 0, size, size);
+
+          // Core fiery plasma gradient
+          const pulse = state.mode === "SPEAKING"
+            ? Math.sin(t * 7.5) * 8 + Math.cos(t * 11) * 4
+            : Math.sin(t * 2.2) * 3;
+
+          const coreRadius = 64 + e * 22 + pulse;
+          const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, coreRadius + 38);
+          grad.addColorStop(0, "rgba(255, 248, 222, 0.98)");
+          grad.addColorStop(0.24, "rgba(255, 190, 50, 0.92)");
+          grad.addColorStop(0.55, "rgba(255, 106, 0, 0.72)");
+          grad.addColorStop(0.82, "rgba(255, 72, 0, 0.22)");
+          grad.addColorStop(1, "rgba(5, 4, 2, 0)");
+
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, coreRadius + 38, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Rotating golden energy arcs inside sphere
+          ctx.save();
+          ctx.translate(cx, cy);
+
+          for (let ring = 0; ring < 3; ring++) {
+            ctx.save();
+            const dir = ring % 2 === 0 ? 1 : -1;
+            ctx.rotate(t * (0.7 + ring * 0.45 + e * 0.8) * dir);
+            const r = 46 + ring * 18 + pulse * 0.45;
+            ctx.strokeStyle = ring === 1
+              ? `rgba(255, 106, 0, ${0.42 + e * 0.35})`
+              : `rgba(255, 198, 72, ${0.38 + e * 0.4})`;
+            ctx.lineWidth = 1.6 + ring * 0.4;
+
+            for (let arc = 0; arc < 3; arc++) {
+              const start = (arc * Math.PI * 2) / 3;
+              ctx.beginPath();
+              ctx.arc(0, 0, r, start, start + 1.18);
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+
+          // Orbiting energy sparks
+          for (const p of particles) {
+            p.angle += p.speed * (1 + e * 1.6);
+            const wobble = Math.sin(t * 2 + p.phase) * (4 + e * 6);
+            const rx = Math.cos(p.angle) * (p.radius + wobble);
+            const ry = Math.sin(p.angle) * (p.radius * 0.86 + wobble * 0.6);
+            const alpha = 0.38 + 0.52 * Math.abs(Math.sin(t * 1.5 + p.phase));
+
+            ctx.fillStyle = p.size > 2.1
+              ? `rgba(255, 224, 140, ${alpha})`
+              : `rgba(255, 118, 12, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(rx, ry, p.size * (0.9 + e * 0.25), 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Central bright singularity dot
+          const innerCore = ctx.createRadialGradient(0, 0, 0, 0, 0, 26 + e * 10);
+          innerCore.addColorStop(0, "rgba(255, 255, 245, 0.98)");
+          innerCore.addColorStop(0.5, "rgba(255, 186, 56, 0.72)");
+          innerCore.addColorStop(1, "rgba(255, 106, 0, 0)");
+          ctx.fillStyle = innerCore;
+          ctx.beginPath();
+          ctx.arc(0, 0, 26 + e * 10, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+          requestAnimationFrame(render);
+        }
+
+        requestAnimationFrame(render);
+      }
+
+      /* =========================================================
+         PEGASUS-LIKE TAMIL SPEECH SYNTHESIS
+      ========================================================= */
+      let availableVoices = [];
+
+      function isTamilVoice(voice) {
+        const lang = (voice.lang || "").toLowerCase();
+        const name = (voice.name || "").toLowerCase();
+        return lang.startsWith("ta") || name.includes("tamil");
+      }
+
+      function scorePegasusVoice(voice) {
+        const name = (voice.name || "").toLowerCase();
+        const lang = (voice.lang || "").toLowerCase();
+        let score = 0;
+        if (lang === "ta-in") score += 30;
+        else if (lang.startsWith("ta")) score += 20;
+        if (name.includes("valluvar") || name.includes("male") || name.includes("man") || name.includes("deep")) score += 40;
+        if (name.includes("enhanced") || name.includes("premium") || name.includes("natural") || name.includes("neural")) score += 22;
+        if (name.includes("google") || name.includes("microsoft")) score += 12;
+        if (name.includes("female") || name.includes("woman") || name.includes("pallavi") || name.includes("lekha")) score -= 25;
+        return score;
+      }
+
+      function refreshVoiceList() {
+        if (!("speechSynthesis" in window)) return;
+        availableVoices = window.speechSynthesis.getVoices() || [];
+        const tamilVoices = availableVoices.filter(isTamilVoice).sort((a, b) => scorePegasusVoice(b) - scorePegasusVoice(a));
+
+        const currentSaved = getPreferredVoiceURI();
+        voiceSelect.innerHTML = `<option value="auto">Auto — Deepest Tamil Voice (Pegasus Style)</option>`;
+
+        for (const v of tamilVoices) {
+          const opt = document.createElement("option");
+          opt.value = v.voiceURI;
+          opt.textContent = `${v.name} (${v.lang})`;
+          voiceSelect.appendChild(opt);
+        }
+
+        if (tamilVoices.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "fallback";
+          opt.textContent = "System Default Voice (No dedicated ta-IN voice found)";
+          voiceSelect.appendChild(opt);
+        }
+
+        if ([...voiceSelect.options].some(o => o.value === currentSaved)) {
+          voiceSelect.value = currentSaved;
+        }
+      }
+
+      function pickTamilPegasusVoice() {
+        if (!availableVoices.length && "speechSynthesis" in window) {
+          availableVoices = window.speechSynthesis.getVoices() || [];
+        }
+        const preferredURI = getPreferredVoiceURI();
+        if (preferredURI !== "auto" && preferredURI !== "fallback") {
+          const exact = availableVoices.find(v => v.voiceURI === preferredURI);
+          if (exact) return exact;
+        }
+
+        const tamilVoices = availableVoices
+          .filter(isTamilVoice)
+          .sort((a, b) => scorePegasusVoice(b) - scorePegasusVoice(a));
+
+        if (tamilVoices.length > 0) return tamilVoices[0];
+        return null;
+      }
+
+      function speakTamil(text, afterSpeakCallback = null) {
+        const cleanText = (text || "").replace(/[*#_`~]/g, "").trim();
+        if (!cleanText) {
+          if (afterSpeakCallback) afterSpeakCallback();
+          return;
+        }
+
+        if (!("speechSynthesis" in window)) {
+          if (afterSpeakCallback) afterSpeakCallback();
+          return;
+        }
+
+        stopRecognitionForSpeech();
+        state.isSpeaking = true;
+        setAssistantState("SPEAKING");
+
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = "ta-IN";
+        utterance.pitch = getVoicePitch(); // ~0.72 deep Pegasus-like pitch
+        utterance.rate = getVoiceRate();   // ~0.92 authoritative measured pace
+        utterance.volume = 1.0;
+
+        const chosenVoice = pickTamilPegasusVoice();
+        if (chosenVoice) {
+          utterance.voice = chosenVoice;
+        }
+
+        let finished = false;
+        const finishSpeech = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(state.speechWatchdogId);
+          state.isSpeaking = false;
+          if (afterSpeakCallback) {
+            afterSpeakCallback();
+          } else {
+            returnToStandby();
+          }
+          resumeRecognitionAfterSpeech();
+        };
+
+        utterance.onend = finishSpeech;
+        utterance.onerror = finishSpeech;
+
+        // Safety watchdog in case mobile browser drops onend event
+        const estimatedMs = Math.max(2800, Math.min(26000, cleanText.length * 115));
+        clearTimeout(state.speechWatchdogId);
+        state.speechWatchdogId = setTimeout(finishSpeech, estimatedMs);
+
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch (_) {
+          finishSpeech();
+        }
+      }
+
+      /* =========================================================
+         WAKE WORD & CREATOR IDENTITY RULES
+      ========================================================= */
+      const WAKE_PATTERNS = [
+        /ஹேய்\s*ஜார்விஸ்/i,
+        /ஹே\s*ஜார்விஸ்/i,
+        /ஏய்\s*ஜார்விஸ்/i,
+        /ஹாய்\s*ஜார்விஸ்/i,
+        /hey[\s,]+jarvis/i,
+        /hi[\s,]+jarvis/i,
+        /he[\s,]+jarvis/i,
+        /a\s+jarvis/i,
+        /^ஜார்விஸ்$/i,
+        /^jarvis$/i
+      ];
+
+      function extractWakeAndCommand(transcript) {
+        const text = transcript.trim();
+        for (const regex of WAKE_PATTERNS) {
+          const match = text.match(regex);
+          if (match) {
+            const after = text.slice(match.index + match[0].length).replace(/^[\s,.:!?-]+/, "").trim();
+            return { matched: true, command: after };
+          }
+        }
+        return { matched: false, command: "" };
+      }
+
+      function isCreatorQuestion(text) {
+        const q = text.toLowerCase();
+        const patterns = [
+          /உன்னை.*உருவாக்க/,
+          /யார்.*உன்னை.*உருவாக்க/,
+          /உருவாக்கியது\s*யாரு/,
+          /உருவாக்கினது/,
+          /உன்னை.*படைத்த/,
+          /உன்.*உருவாக்குநர்/,
+          /who\s+(created|made|built|developed|invented)\s+(you|jarvis)/,
+          /who\s+is\s+your\s+(creator|maker|developer|boss|owner)/,
+          /created\s+you/,
+          /made\s+you/
+        ];
+        return patterns.some(p => p.test(q));
+      }
+
+      /* =========================================================
+         ACTION BUTTON PARSER (YouTube, Websites, tel: Dialer)
+      ========================================================= */
+      function clearActionButtons() {
+        actionButtonsEl.innerHTML = "";
+      }
+
+      function addActionButton(label, href, external = true) {
+        const a = document.createElement("a");
+        a.className = "action-chip";
+        a.href = href;
+        a.textContent = label;
+        if (external && !href.startsWith("tel:")) {
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+        }
+        actionButtonsEl.appendChild(a);
+      }
+
+      function parseAndRenderActions(aiText, userQuery) {
+        clearActionButtons();
+        const tagRegex = /\[ACTION:(OPEN|CALL)\|([^|\]]+)\|([^\]]+)\]/gi;
+        let cleaned = aiText;
+        const addedUrls = new Set();
+
+        let match;
+        while ((match = tagRegex.exec(aiText)) !== null) {
+          const type = match[1].toUpperCase();
+          const label = match[2].trim();
+          const url = match[3].trim();
+          if (!addedUrls.has(url)) {
+            addedUrls.add(url);
+            const icon = type === "CALL" ? "📞 " : "🔗 ";
+            addActionButton(icon + label, url, type !== "CALL");
+          }
+          cleaned = cleaned.replace(match[0], "");
+        }
+
+        // Smart local fallback detection from userQuery so buttons always show reliably
+        const q = (userQuery || "").toLowerCase();
+
+        if (/youtube|யூடியூப்|யூட்யூப்|வீடியோ/i.test(q)) {
+          const searchMatch = userQuery.replace(/(open|play|search|youtube|யூடியூப்|யூட்யூப்|திற|ஓபன்|போடு)/gi, "").trim();
+          const ytUrl = searchMatch.length > 2
+            ? `https://www.youtube.com/results?search_query=${encodeURIComponent(searchMatch)}`
+            : "https://www.youtube.com";
+          if (![...addedUrls].some(u => u.includes("youtube.com"))) {
+            addedUrls.add(ytUrl);
+            addActionButton("▶ YouTube திற", ytUrl, true);
+          }
+        }
+
+        if (/google|கூகுள்/i.test(q)) {
+          const gUrl = "https://www.google.com";
+          if (![...addedUrls].some(u => u.includes("google.com"))) {
+            addedUrls.add(gUrl);
+            addActionButton("🌐 Google திற", gUrl, true);
+          }
+        }
+
+        if (/whatsapp|வாட்ஸ்அப்/i.test(q)) {
+          const waUrl = "https://wa.me/";
+          if (![...addedUrls].some(u => u.includes("wa.me"))) {
+            addedUrls.add(waUrl);
+            addActionButton("💬 WhatsApp திற", waUrl, true);
+          }
+        }
+
+        if (/maps|மேப்|வழி|direction/i.test(q)) {
+          const mapUrl = "https://maps.google.com";
+          if (![...addedUrls].some(u => u.includes("maps.google.com"))) {
+            addedUrls.add(mapUrl);
+            addActionButton("📍 Google Maps திற", mapUrl, true);
+          }
+        }
+
+        // Phone number / dialer detection
+        const digitsMatch = userQuery.replace(/[\s\-()]/g, "").match(/(?:\+?\d{7,13})/);
+        if (digitsMatch && /(call|dial|phone|கால்|அழை|போன்)/i.test(q)) {
+          const telHref = `tel:${digitsMatch[0]}`;
+          if (!addedUrls.has(telHref)) {
+            addedUrls.add(telHref);
+            addActionButton(`📞 அழைப்பு: ${digitsMatch[0]}`, telHref, false);
+          }
+        }
+
+        return cleaned.trim();
+      }
+
+      /* =========================================================
+         GEMINI GENERATECONTENT API INTEGRATION
+      ========================================================= */
+      async function askGemini(userQuery) {
+        const apiKey = getApiKey();
+        const model = getModelName();
+
+        if (!apiKey) {
+          return "API Key அமைக்கப்படவில்லை. Settings-ல் Gemini API Key-ஐ உள்ளிடவும்.";
+        }
+
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+        state.history.push({
+          role: "user",
+          parts: [{ text: userQuery }]
+        });
+        if (state.history.length > 10) {
+          state.history = state.history.slice(-10);
+        }
+
+        const payload = {
+          systemInstruction: {
+            parts: [{ text: SYSTEM_INSTRUCTION }]
+          },
+          contents: state.history,
+          generationConfig: {
+            temperature: 0.72,
+            maxOutputTokens: 320
+          }
+        };
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            const errMsg = data?.error?.message || `HTTP ${res.status}`;
+            console.error("Gemini API error:", errMsg);
+            if (res.status === 400 || res.status === 401 || res.status === 403) {
+              return "API Key அல்லது Model பெயரில் பிழை உள்ளது. Settings-ல் Gemini API Key-ஐ சரிபார்க்கவும்.";
+            }
+            return "தொடர்பில் சிறிய தாமதம் ஏற்பட்டுள்ளது. மீண்டும் முயற்சிக்கவும்.";
+          }
+
+          const reply = data?.candidates?.[0]?.content?.parts?.map(p => p.text || "").join(" ").trim();
+          if (!reply) {
+            return "மன்னிக்கவும், அந்தக் கேள்விக்குப் பதில் கிடைக்கவில்லை. மீண்டும் சொல்லுங்க.";
+          }
+
+          state.history.push({
+            role: "model",
+            parts: [{ text: reply }]
+          });
+
+          return reply;
+        } catch (err) {
+          console.error("Network error:", err);
+          return "இணைய இணைப்பைச் சரிபார்க்கவும். சிக்னல் கிடைத்ததும் மீண்டும் கேளுங்கள்.";
+        }
+      }
+
+      /* =========================================================
+         COMMAND PROCESSING PIPELINE
+      ========================================================= */
+      function returnToStandby() {
+        clearTimeout(state.listeningTimeoutId);
+        if (!state.permissionDenied) {
+          setAssistantState("STANDBY");
+        }
+      }
+
+      function enterActiveListeningWindow() {
+        clearTimeout(state.listeningTimeoutId);
+        setAssistantState("LISTENING");
+        state.listeningTimeoutId = setTimeout(() => {
+          if (state.mode === "LISTENING") {
+            returnToStandby();
+          }
+        }, 12000);
+      }
+
+      async function handleCommand(commandText) {
+        clearTimeout(state.listeningTimeoutId);
+        const query = commandText.trim();
+        if (!query) {
+          enterActiveListeningWindow();
+          return;
+        }
+
+        transcriptEl.classList.remove("interim");
+        transcriptEl.textContent = query;
+        setAssistantState("PROCESSING");
+        clearActionButtons();
+
+        let rawReply = "";
+        if (isCreatorQuestion(query)) {
+          rawReply = "என்னை உருவாக்கியது M. KOWSIK";
+        } else {
+          rawReply = await askGemini(query);
+        }
+
+        const spokenReply = parseAndRenderActions(rawReply, query);
+        responseEl.textContent = spokenReply;
+
+        speakTamil(spokenReply, () => {
+          returnToStandby();
+        });
+      }
+
+      /* =========================================================
+         CONTINUOUS HANDS-FREE TAMIL SPEECH RECOGNITION
+      ========================================================= */
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+
+      function stopRecognitionForSpeech() {
+        clearTimeout(state.restartTimerId);
+        if (recognition && state.recognitionActive) {
+          try {
+            recognition.abort();
+          } catch (_) {}
+          state.recognitionActive = false;
+        }
+      }
+
+      function resumeRecognitionAfterSpeech() {
+        if (!state.recognitionSupported || state.permissionDenied || state.isSpeaking) return;
+        clearTimeout(state.restartTimerId);
+        state.restartTimerId = setTimeout(() => {
+          startContinuousRecognition();
+        }, 260);
+      }
+
+      function startContinuousRecognition() {
+        if (!SpeechRecognitionClass) {
+          state.recognitionSupported = false;
+          setAssistantState("ERROR", "SPEECH API UNSUPPORTED");
+          responseEl.textContent = "இந்த உலாவியில் (Browser) தானியங்கி தமிழ் குரல் உணர்தல் ஆதரிக்கப்படவில்லை. தயவுசெய்து Google Chrome அல்லது Microsoft Edge பயன்படுத்தவும்.";
+          return;
+        }
+
+        state.recognitionSupported = true;
+        if (state.isSpeaking || state.permissionDenied || state.recognitionActive) return;
+
+        if (!recognition) {
+          recognition = new SpeechRecognitionClass();
+          recognition.lang = "ta-IN";
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.maxAlternatives = 1;
+
+          recognition.onstart = () => {
+            state.recognitionActive = true;
+            if (state.mode === "ERROR") {
+              setAssistantState("STANDBY");
+            }
+          };
+
+          recognition.onresult = (event) => {
+            if (state.isSpeaking || state.mode === "PROCESSING") return;
+
+            let interimChunk = "";
+            let finalChunk = "";
+
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const res = event.results[i];
+              const txt = (res[0]?.transcript || "").trim();
+              if (!txt) continue;
+              if (res.isFinal) {
+                finalChunk += (finalChunk ? " " : "") + txt;
+              } else {
+                interimChunk += (interimChunk ? " " : "") + txt;
+              }
+            }
+
+            if (interimChunk) {
+              if (state.mode === "LISTENING") {
+                transcriptEl.classList.add("interim");
+                transcriptEl.textContent = interimChunk;
+              } else if (state.mode === "STANDBY") {
+                // Allow instant wake-word feedback if clearly detected in interim
+                const wakeCheck = extractWakeAndCommand(interimChunk);
+                if (wakeCheck.matched && !wakeCheck.command) {
+                  transcriptEl.classList.add("interim");
+                  transcriptEl.textContent = interimChunk;
+                }
+              }
+            }
+
+            if (finalChunk) {
+              const now = Date.now();
+              if (finalChunk === state.lastFinalText && now - state.lastFinalStamp < 1800) {
+                return;
+              }
+              state.lastFinalText = finalChunk;
+              state.lastFinalStamp = now;
+
+              if (state.mode === "STANDBY") {
+                const wake = extractWakeAndCommand(finalChunk);
+                if (!wake.matched) {
+                  // Passive standby: ignore background speech without wake word
+                  return;
+                }
+
+                transcriptEl.classList.remove("interim");
+                transcriptEl.textContent = finalChunk;
+
+                if (wake.command) {
+                  handleCommand(wake.command);
+                } else {
+                  const ack = "சொல்லுங்க, நான் தயார்.";
+                  clearActionButtons();
+                  responseEl.textContent = ack;
+                  speakTamil(ack, () => {
+                    enterActiveListeningWindow();
+                  });
+                }
+              } else if (state.mode === "LISTENING") {
+                // If user repeats wake word inside listening window, strip it
+                const wake = extractWakeAndCommand(finalChunk);
+                const commandToRun = wake.matched ? wake.command : finalChunk;
+                if (wake.matched && !commandToRun) {
+                  enterActiveListeningWindow();
+                } else {
+                  handleCommand(commandToRun);
+                }
+              }
+            }
+          };
+
+          recognition.onerror = (event) => {
+            state.recognitionActive = false;
+            const err = event.error;
+
+            if (err === "not-allowed" || err === "service-not-allowed") {
+              state.permissionDenied = true;
+              setAssistantState("ERROR", "MIC PERMISSION DENIED");
+              transcriptEl.textContent = "மைக்ரோஃபோன் அணுகல் இல்லை.";
+              responseEl.textContent = "மைக்ரோஃபோன் அனுமதி மறுக்கப்பட்டது. உலாவியின் முகவரிப் பட்டையில் உள்ள பூட்டு (🔒) அல்லது Site Settings வழியாக Microphone அனுமதியை 'Allow' செய்து பக்கத்தை Refresh செய்யவும்.";
+              return;
+            }
+
+            if (err === "audio-capture") {
+              setAssistantState("ERROR", "NO MICROPHONE FOUND");
+              responseEl.textContent = "மைக்ரோஃபோன் இணைக்கப்படவில்லை அல்லது வேறு செயலி பயன்படுத்துகிறது.";
+              return;
+            }
+
+            // Benign errors like 'no-speech' or 'aborted' will auto-restart via onend
+          };
+
+          recognition.onend = () => {
+            state.recognitionActive = false;
+            if (!state.permissionDenied && !state.isSpeaking) {
+              clearTimeout(state.restartTimerId);
+              state.restartTimerId = setTimeout(() => {
+                startContinuousRecognition();
+              }, 280);
+            }
+          };
+        }
+
+        try {
+          recognition.start();
+        } catch (_) {
+          // Ignore InvalidStateError if already started
+        }
+      }
+
+      /* =========================================================
+         SETTINGS MODAL LOGIC
+      ========================================================= */
+      function openSettings() {
+        const storedKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || "";
+        apiKeyInput.value = storedKey;
+        modelInput.value = getModelName();
+        pitchRange.value = getVoicePitch();
+        pitchVal.textContent = Number(pitchRange.value).toFixed(2);
+        rateRange.value = getVoiceRate();
+        rateVal.textContent = Number(rateRange.value).toFixed(2);
+        refreshVoiceList();
+        settingsModal.classList.add("open");
+      }
+
+      function closeSettings() {
+        settingsModal.classList.remove("open");
+      }
+
+      settingsOpenBtn.addEventListener("click", openSettings);
+      settingsCloseBtn.addEventListener("click", closeSettings);
+      settingsModal.addEventListener("click", (e) => {
+        if (e.target === settingsModal) closeSettings();
+      });
+
+      pitchRange.addEventListener("input", () => {
+        pitchVal.textContent = Number(pitchRange.value).toFixed(2);
+      });
+
+      rateRange.addEventListener("input", () => {
+        rateVal.textContent = Number(rateRange.value).toFixed(2);
+      });
+
+      saveSettingsBtn.addEventListener("click", () => {
+        const customKey = apiKeyInput.value.trim();
+        if (customKey) {
+          localStorage.setItem(STORAGE_KEYS.API_KEY, customKey);
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.API_KEY);
+        }
+
+        const model = modelInput.value.trim() || DEFAULT_MODEL;
+        localStorage.setItem(STORAGE_KEYS.MODEL, model);
+        localStorage.setItem(STORAGE_KEYS.VOICE_URI, voiceSelect.value);
+        localStorage.setItem(STORAGE_KEYS.PITCH, pitchRange.value);
+        localStorage.setItem(STORAGE_KEYS.RATE, rateRange.value);
+
+        closeSettings();
+        responseEl.textContent = "அமைப்புகள் சேமிக்கப்பட்டன.";
+      });
+
+      resetKeyBtn.addEventListener("click", () => {
+        localStorage.removeItem(STORAGE_KEYS.API_KEY);
+        apiKeyInput.value = "";
+        responseEl.textContent = "Embedded API Key மீண்டும் செயலாக்கப்பட்டது.";
+      });
+
+      clearHistoryBtn.addEventListener("click", () => {
+        state.history = [];
+        closeSettings();
+        responseEl.textContent = "உரையாடல் நினைவகம் சுத்தம் செய்யப்பட்டது.";
+      });
+
+      testVoiceBtn.addEventListener("click", () => {
+        localStorage.setItem(STORAGE_KEYS.VOICE_URI, voiceSelect.value);
+        localStorage.setItem(STORAGE_KEYS.PITCH, pitchRange.value);
+        localStorage.setItem(STORAGE_KEYS.RATE, rateRange.value);
+        speakTamil("வணக்கம். நான் ஜார்விஸ், உங்கள் தமிழ் குரல் மையம்.");
+      });
+
+      /* =========================================================
+         AUTO-BOOT SEQUENCE & LAUNCH
+      ========================================================= */
+      function runAutoBoot() {
+        initOrbCanvas();
+
+        if ("speechSynthesis" in window) {
+          refreshVoiceList();
+          window.speechSynthesis.onvoiceschanged = refreshVoiceList;
+        }
+
+        // Step 1
+        bootText.textContent = "INITIALIZING JARVIS...";
+        bootBarFill.style.width = "34%";
+
+        setTimeout(() => {
+          bootText.textContent = "LOADING CORE...";
+          bootBarFill.style.width = "72%";
+        }, 620);
+
+        setTimeout(() => {
+          bootText.textContent = "SYSTEM ONLINE";
+          bootBarFill.style.width = "100%";
+        }, 1250);
+
+        setTimeout(() => {
+          bootScreen.classList.add("hidden");
+          setAssistantState("STANDBY");
+          startContinuousRecognition();
+        }, 1780);
+      }
+
+      // Silently prime SpeechSynthesis if mobile browser requires a touch anywhere
+      document.addEventListener("touchstart", () => {
+        if ("speechSynthesis" in window && availableVoices.length === 0) {
+          refreshVoiceList();
+        }
+      }, { once: true, passive: true });
+
+      window.addEventListener("load", runAutoBoot);
+    })();
+  </script>
+</body>
+</html>
